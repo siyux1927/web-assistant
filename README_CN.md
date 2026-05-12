@@ -4,7 +4,32 @@
 
 中文 | [English](README.md)
 
-输入任务，看 Claude 一步步浏览网页，实时推送每步截图，最后返回结构化结果。
+输入任务，看智能体一步步浏览网页，实时推送每步截图，最后返回结构化结果。
+
+--- 
+
+## 深度阅读
+
+做这个项目前，我通读了 browser-use 源码并整理成文章：
+
+**[→ browser-use 源码深度解析：一个 Web Agent 框架的工程落地实践](docs/browser-use-deep-dive.md)**
+
+覆盖：Agent Loop 三阶段模型、DOM 三协议并行提取、Token 压缩机制、死循环检测、结构化输出可靠性、多标签页竞态处理。
+
+---
+
+## 踩坑记录
+
+**browser-use 0.12.6 已从 LangChain 迁移到自己的 LLM 抽象层**（`browser_use/llm/`）。`Agent.__init__` 会校验 `llm.provider == "browser-use"`，LangChain 的 `ChatAnthropic` 没有 `provider` 属性，直接抛 `AttributeError`。解法：改用 `browser_use.llm.anthropic.chat.ChatAnthropic`。
+
+**`BrowserStateSummary.screenshot` 已经是 base64 字符串**，不是原始字节。再套一层 `base64.b64encode()` 会二次编码，前端渲染出空白图片。
+
+**`max_steps` 要传给 `agent.run()`**，不是 `Agent.__init__()`。传给构造函数会被 `**kwargs` 静默吞掉，没有任何报错，但完全不生效。
+
+---
+
+![Web Assistant 完成一次 GitHub trending 搜索——步骤时间轴、实时截图、最终结果](assets/pre-result.GIF)
+*完整演示：输入任务 → Agent 浏览 GitHub → 步骤时间轴实时截图 → 结构化结果输出。*
 
 ---
 
@@ -118,6 +143,14 @@ GET /api/task/{task_id}
 
 ---
 
+![输入任务并点击开始——Agent 后台立即启动](assets/pre-call-browser.GIF)
+*任务提交：用自然语言描述需求，点击开始，Agent 在后台启动 Chromium 会话并立即执行。*
+
+![Claude 通过 Playwright CDP 在真实 Chromium 窗口中浏览 GitHub Trending](assets/pre-scroll.GIF)
+*Agent 实时浏览——真实的 Chromium 浏览器，由 Claude Sonnet 通过 Chrome DevTools Protocol 驱动。*
+
+---
+
 ## 项目结构
 
 ```
@@ -147,16 +180,6 @@ pytest tests/ -v   # 20 个测试
 
 ---
 
-## 踩坑记录
-
-**browser-use 0.12.6 已从 LangChain 迁移到自己的 LLM 抽象层**（`browser_use/llm/`）。`Agent.__init__` 会校验 `llm.provider == "browser-use"`，LangChain 的 `ChatAnthropic` 没有 `provider` 属性，直接抛 `AttributeError`。解法：改用 `browser_use.llm.anthropic.chat.ChatAnthropic`。
-
-**`BrowserStateSummary.screenshot` 已经是 base64 字符串**，不是原始字节。再套一层 `base64.b64encode()` 会二次编码，前端渲染出空白图片。
-
-**`max_steps` 要传给 `agent.run()`**，不是 `Agent.__init__()`。传给构造函数会被 `**kwargs` 静默吞掉，没有任何报错，但完全不生效。
-
----
-
 ## 路线图
 
 **V0（当前）**
@@ -172,16 +195,6 @@ pytest tests/ -v   # 20 个测试
 - [ ] React 前端 + 可视化 Agent 执行图
 - [ ] 接入 MCP，动态发现外部工具
 - [ ] DOM 提取失败时降级到 Vision 模型兜底
-
----
-
-## 深度阅读
-
-做这个项目前，我通读了 browser-use 源码并整理成文章：
-
-**[→ browser-use 源码深度解析：一个 Web Agent 框架的工程落地实践](docs/browser-use-deep-dive.md)**
-
-覆盖：Agent Loop 三阶段模型、DOM 三协议并行提取、Token 压缩机制、死循环检测、结构化输出可靠性、多标签页竞态处理。
 
 ---
 

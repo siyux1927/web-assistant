@@ -4,7 +4,32 @@
 
 [中文版](README_CN.md) | English
 
-Type a task. Watch Claude browse the web step by step, with live screenshots streamed to your browser. Get structured results.
+Type a task. Watch the agent browse the web step by step, with live screenshots streamed to your browser. Get structured results.
+
+---
+
+## Deep Dive
+
+Before building this, I read through the browser-use source and wrote a detailed breakdown:
+
+**[→ browser-use internals: how a Web Agent framework actually works](docs/browser-use-deep-dive.md)** (Chinese)
+
+Covers: the 3-phase Agent Loop, parallel DOM extraction via 3 CDP protocols, token compression, infinite-loop detection, structured output reliability, and multi-tab race conditions.
+
+---
+
+## Things I Learned Building This
+
+**browser-use 0.12.6 migrated away from LangChain** to its own LLM abstraction layer (`browser_use/llm/`). The `Agent.__init__` validates `llm.provider == "browser-use"` — LangChain's `ChatAnthropic` has no `provider` attribute, causing a cryptic `AttributeError`. Fix: use `browser_use.llm.anthropic.chat.ChatAnthropic` instead.
+
+**`BrowserStateSummary.screenshot` is already base64**, not raw bytes. Wrapping it in `base64.b64encode()` double-encodes and produces a blank image in the browser.
+
+**`max_steps` belongs in `agent.run()`**, not `Agent.__init__()`. Passing it to the constructor silently succeeds (absorbed by `**kwargs`) but has no effect.
+
+---
+
+![Web Assistant completing a GitHub trending search — step timeline with live screenshots and final result](assets/pre-result.GIF)
+*End-to-end demo: task input → agent browses GitHub → step timeline with live screenshots → structured result.*
 
 ---
 
@@ -118,6 +143,14 @@ GET /api/task/{task_id}
 
 ---
 
+![Typing a task and clicking start — agent initializes in the background](assets/pre-call-browser.GIF)
+*Task submission: type in natural language, click start. The agent spins up a Chromium session and begins immediately.*
+
+![Claude navigating GitHub Trending in a real Chromium window via Playwright CDP](assets/pre-scroll.GIF)
+*The agent browsing live — real Chromium controlled by Claude Sonnet over Chrome DevTools Protocol.*
+
+---
+
 ## Project Structure
 
 ```
@@ -147,16 +180,6 @@ pytest tests/ -v   # 20 tests
 
 ---
 
-## Things I Learned Building This
-
-**browser-use 0.12.6 migrated away from LangChain** to its own LLM abstraction layer (`browser_use/llm/`). The `Agent.__init__` validates `llm.provider == "browser-use"` — LangChain's `ChatAnthropic` has no `provider` attribute, causing a cryptic `AttributeError`. Fix: use `browser_use.llm.anthropic.chat.ChatAnthropic` instead.
-
-**`BrowserStateSummary.screenshot` is already base64**, not raw bytes. Wrapping it in `base64.b64encode()` double-encodes and produces a blank image in the browser.
-
-**`max_steps` belongs in `agent.run()`**, not `Agent.__init__()`. Passing it to the constructor silently succeeds (absorbed by `**kwargs`) but has no effect.
-
----
-
 ## Roadmap
 
 **V0 (current)**
@@ -172,16 +195,6 @@ pytest tests/ -v   # 20 tests
 - [ ] React frontend with agent execution graph
 - [ ] MCP integration for dynamic tool discovery
 - [ ] Vision model fallback when DOM extraction fails
-
----
-
-## Deep Dive
-
-Before building this, I read through the browser-use source and wrote a detailed breakdown:
-
-**[→ browser-use internals: how a Web Agent framework actually works](docs/browser-use-deep-dive.md)** (Chinese)
-
-Covers: the 3-phase Agent Loop, parallel DOM extraction via 3 CDP protocols, token compression, infinite-loop detection, structured output reliability, and multi-tab race conditions.
 
 ---
 
