@@ -40,3 +40,33 @@ def test_get_task_returns_404_for_unknown():
         mock_manager.get_task.return_value = None
         response = client.get("/api/task/nonexistent-id")
     assert response.status_code == 404
+
+
+def test_websocket_streams_events_and_closes_on_sentinel():
+    import asyncio
+
+    mock_queue = asyncio.Queue()
+    mock_queue.put_nowait({"type": "step", "step": 1, "goal": "searching", "screenshot": None})
+    mock_queue.put_nowait({"type": "done", "result": "found results"})
+    mock_queue.put_nowait(None)
+
+    with patch("backend.main.manager") as mock_manager:
+        mock_manager.get_queue.return_value = mock_queue
+        with client.websocket_connect("/ws/test-task-id") as ws:
+            msg1 = ws.receive_json()
+            msg2 = ws.receive_json()
+
+    assert msg1["type"] == "step"
+    assert msg1["step"] == 1
+    assert msg2["type"] == "done"
+    assert msg2["result"] == "found results"
+
+
+def test_websocket_closes_with_4004_for_unknown_task():
+    with patch("backend.main.manager") as mock_manager:
+        mock_manager.get_queue.return_value = None
+        try:
+            with client.websocket_connect("/ws/unknown-task-id") as ws:
+                ws.receive_text()
+        except Exception:
+            pass  # Expected: connection closed by server

@@ -1,22 +1,16 @@
-from contextlib import asynccontextmanager
+import pathlib
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import field_validator
 
-from .models import TaskCreate, TaskResponse, TaskState, TaskStatus
+from .models import TaskCreate, TaskResponse, TaskState
 from .agent_manager import AgentManager
 
+FRONTEND_PATH = pathlib.Path(__file__).parent.parent / "frontend" / "index.html"
 
 manager = AgentManager()
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    yield
-
-
-app = FastAPI(title="Web Assistant", lifespan=lifespan)
+app = FastAPI(title="Web Assistant")
 
 
 class TaskCreateValidated(TaskCreate):
@@ -64,4 +58,6 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str) -> None:
 
 @app.get("/")
 async def serve_frontend() -> FileResponse:
-    return FileResponse("frontend/index.html")
+    if not FRONTEND_PATH.exists():
+        raise HTTPException(status_code=503, detail="Frontend not yet deployed")
+    return FileResponse(FRONTEND_PATH)
