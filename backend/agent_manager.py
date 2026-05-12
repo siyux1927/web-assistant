@@ -32,12 +32,8 @@ class AgentManager:
         llm = get_llm()
 
         async def on_step(browser_state, agent_output, step_num: int) -> None:
-            screenshot_b64: str | None = None
-            try:
-                if isinstance(browser_state.screenshot, bytes):
-                    screenshot_b64 = base64.b64encode(browser_state.screenshot).decode()
-            except Exception:
-                pass
+            # browser_state.screenshot is already a base64 string or None
+            screenshot_b64: str | None = browser_state.screenshot
 
             goal = ""
             try:
@@ -51,12 +47,12 @@ class AgentManager:
         agent = Agent(
             task=task,
             llm=llm,
-            max_steps=20,
             register_new_step_callback=on_step,
         )
 
         try:
-            history = await agent.run()
+            # max_steps belongs to run(), not Agent.__init__
+            history = await agent.run(max_steps=20)
             result = history.final_result() or "任务完成，未提取到结果"
             async with self._lock:
                 self._tasks[task_id] = TaskState(
