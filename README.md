@@ -1,3 +1,5 @@
+<div align="center">
+
 # WebSearchPilot
 
 > **Natural language → Browser agent → Real-time results**
@@ -5,6 +7,8 @@
 [中文版](README_CN.md) | English
 
 Type a task. Watch the agent browse the web step by step, with live screenshots streamed to your browser. Get structured results.
+
+</div>
 
 ---
 
