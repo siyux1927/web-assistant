@@ -41,3 +41,21 @@ def test_error_event_serializes():
     data = event.model_dump()
     assert data["type"] == "error"
     assert data["message"] == "Connection timeout"
+
+
+def test_step_event_rejects_wrong_type():
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        StepEvent(type="wrong", step=1, goal="test")
+
+
+def test_done_event_rejects_wrong_type():
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        DoneEvent(type="wrong", result="result")
+
+
+def test_error_event_rejects_wrong_type():
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        ErrorEvent(type="wrong", message="msg")

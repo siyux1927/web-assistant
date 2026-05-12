@@ -1,3 +1,4 @@
+from typing import Literal
 from enum import Enum
 from pydantic import BaseModel
 
@@ -23,17 +24,17 @@ class TaskState(BaseModel):
 
 
 class StepEvent(BaseModel):
-    type: str = "step"
+    type: Literal["step"] = "step"
     step: int
     goal: str
     screenshot: str | None = None
 
 
 class DoneEvent(BaseModel):
-    type: str = "done"
+    type: Literal["done"] = "done"
     result: str
 
 
 class ErrorEvent(BaseModel):
-    type: str = "error"
+    type: Literal["error"] = "error"
     message: str
