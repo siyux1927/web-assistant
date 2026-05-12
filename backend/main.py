@@ -10,7 +10,7 @@ FRONTEND_PATH = pathlib.Path(__file__).parent.parent / "frontend" / "index.html"
 
 manager = AgentManager()
 
-app = FastAPI(title="Web Assistant")
+app = FastAPI(title="WebSearchPilot")
 
 
 class TaskCreateValidated(TaskCreate):

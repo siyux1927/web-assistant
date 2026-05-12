@@ -1,4 +1,4 @@
-# Web Assistant
+# WebSearchPilot
 
 > **Natural language → Browser agent → Real-time results**
 
@@ -28,7 +28,7 @@ Covers: the 3-phase Agent Loop, parallel DOM extraction via 3 CDP protocols, tok
 
 ---
 
-![Web Assistant completing a GitHub trending search — step timeline with live screenshots and final result](assets/pre-result.GIF)
+![WebSearchPilot completing a GitHub trending search — step timeline with live screenshots and final result](assets/pre-result.GIF)
 *End-to-end demo: task input → agent browses GitHub → step timeline with live screenshots → structured result.*
 
 ---
@@ -154,7 +154,7 @@ GET /api/task/{task_id}
 ## Project Structure
 
 ```
-web-assistant/
+web-search-pilot/
 ├── backend/
 │   ├── agent_manager.py   # browser-use wrapper + asyncio.Queue event stream
 │   ├── config.py          # LLM client factory (singleton via lru_cache)

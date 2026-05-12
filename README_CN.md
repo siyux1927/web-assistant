@@ -1,4 +1,4 @@
-# Web Assistant
+# Web Agent自动查找
 
 > **自然语言 → 浏览器 Agent → 实时结果**
 
@@ -28,7 +28,7 @@
 
 ---
 
-![Web Assistant 完成一次 GitHub trending 搜索——步骤时间轴、实时截图、最终结果](assets/pre-result.GIF)
+![Web Agent自动查找 完成一次 GitHub trending 搜索——步骤时间轴、实时截图、最终结果](assets/pre-result.GIF)
 *完整演示：输入任务 → Agent 浏览 GitHub → 步骤时间轴实时截图 → 结构化结果输出。*
 
 ---
@@ -154,7 +154,7 @@ GET /api/task/{task_id}
 ## 项目结构
 
 ```
-web-assistant/
+web-search-pilot/
 ├── backend/
 │   ├── agent_manager.py   # browser-use 封装 + asyncio.Queue 事件流
 │   ├── config.py          # LLM 客户端工厂（单例 + lru_cache）
