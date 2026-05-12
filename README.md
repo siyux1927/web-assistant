@@ -1,164 +1,187 @@
 # Web Assistant
 
-> 基于 browser-use + FastAPI + WebSocket 的 Web Agent demo，用自然语言驱动浏览器执行信息搜集任务，实时推送执行截图和步骤。
+> **Natural language → Browser agent → Real-time results**
+
+[中文版](README_CN.md) | English
+
+Type a task. Watch Claude browse the web step by step, with live screenshots streamed to your browser. Get structured results.
 
 ---
 
-## 演示
-
-用户输入任务 → Agent 自动浏览器操作 → 实时推送每步截图 → 返回提取结果
+## What It Does
 
 ```
-任务输入: "在 GitHub trending 找今天 Python 类目 top 3 项目，给出项目名和简介"
+You:    "Find the top 5 fastest-growing Python AI repos on GitHub trending today"
 
-Step 1  正在打开 GitHub trending 页面        [截图]
-Step 2  切换到 Python 类目过滤               [截图]
-Step 3  提取项目列表信息                      [截图]
-...
-结果:
-  1. browser-use — Make websites accessible for AI agents (★ 48.2k)
+Step 1  Opening github.com/trending?l=python      [screenshot]
+Step 2  Locating trending list items              [screenshot]
+Step 3  Extracting names, stars, descriptions     [screenshot]
+
+Result:
+  1. browser-use — Make websites accessible for AI agents  ★48.2k (+2.1k today)
   2. ...
 ```
 
----
-
-## 技术栈
-
-| 层 | 技术 |
-|----|------|
-| AI 决策 | Claude Sonnet 4.6 via Anthropic API |
-| Web Agent | [browser-use](https://github.com/browser-use/browser-use) |
-| 浏览器控制 | Playwright + Chromium (CDP 协议) |
-| 后端 | FastAPI + uvicorn |
-| 实时通信 | WebSocket (asyncio.Queue 事件流) |
-| 前端 | 单文件 HTML + Vanilla JS |
+The agent runs in a real Chromium browser (via Playwright), controlled by Claude Sonnet. Every step is streamed live over WebSocket — no polling, no refresh.
 
 ---
 
-## 架构
+## Tech Stack
 
-```
-用户浏览器
-  │  POST /api/task → 创建任务，返回 task_id
-  │  WS  /ws/{id}  → 建立 WebSocket，接收实时事件
-  ▼
-FastAPI 后端 (backend/main.py)
-  │
-  ├── AgentManager (backend/agent_manager.py)
-  │     ├── 每个任务一个 asyncio.Queue
-  │     ├── browser-use Agent 注册 step callback
-  │     └── callback 将 StepEvent / DoneEvent / ErrorEvent 压入 Queue
-  │
-  └── WebSocket handler 消费 Queue，推送 JSON 到前端
+| Layer | Technology |
+|-------|-----------|
+| AI decision-making | Claude Sonnet via Anthropic API |
+| Browser control | [browser-use](https://github.com/browser-use/browser-use) + Playwright + Chromium |
+| Backend | FastAPI + uvicorn |
+| Real-time streaming | WebSocket + `asyncio.Queue` |
+| Frontend | Single-file HTML + Vanilla JS |
 
-browser-use Agent
-  └── BrowserSession → Chromium (CDP)
-```
-
-**关键设计决策：**
-- `asyncio.Queue` 作为 producer/consumer 解耦层，支持 WebSocket 连接晚于任务创建
-- `asyncio.Lock` 保护任务状态写入，避免并发竞态
-- `Literal["step"|"done"|"error"]` 类型约束 WebSocket 事件契约
-- `agent.run(max_steps=20)` 控制最大执行步数，防止失控
+No React. No Redux. No build step. Clone and run.
 
 ---
 
-## 快速开始
+## Quick Start
 
-**环境要求：** Python 3.11+
+**Requirements:** Python 3.11+, an [Anthropic API key](https://console.anthropic.com/)
 
 ```bash
-# 1. 安装依赖
+# 1. Install
 pip install -e ".[dev]"
 playwright install chromium
 
-# 2. 配置 API Key
+# 2. Configure
 cp .env.example .env
-# 编辑 .env，填写 ANTHROPIC_API_KEY=sk-ant-...
+# Edit .env → ANTHROPIC_API_KEY=sk-ant-...
 
-# 3. 启动服务
+# 3. Run
 uvicorn backend.main:app --reload --port 8000
 
-# 4. 打开浏览器
+# 4. Open
 open http://localhost:8000
 ```
 
-**运行测试：**
+---
 
-```bash
-pytest tests/ -v  # 20 个测试，无需真实 API Key
+## Architecture
+
 ```
+Browser (you)
+  │  POST /api/task  → create task, get task_id
+  │  WS   /ws/{id}  → receive live events
+  ▼
+FastAPI  (backend/main.py)
+  │
+  ├── AgentManager  (backend/agent_manager.py)
+  │     ├── asyncio.Queue  per task  ← producer/consumer decoupling
+  │     ├── asyncio.Lock   protects task state writes
+  │     └── register_new_step_callback → streams StepEvent to queue
+  │
+  └── WebSocket handler  →  consumes queue, pushes JSON to client
+
+browser-use Agent  →  Chromium (CDP)
+```
+
+**Key design decisions:**
+
+- `asyncio.Queue` as producer/consumer: WebSocket can connect after task starts without missing events
+- Immutable `TaskState` object replacement (not mutation) under `asyncio.Lock` — no partial-state reads
+- `None` sentinel in queue signals clean task end to WebSocket handler
+- `register_new_step_callback` wired at `Agent()` init, not as a decorator
+- `agent.run(max_steps=20)` — `max_steps` lives in `run()`, not `Agent.__init__()` (a common browser-use pitfall)
 
 ---
 
-## 项目结构
+## WebSocket Event Contract
 
 ```
-web-assistant/
-├── backend/
-│   ├── agent_manager.py   # browser-use 封装 + asyncio.Queue 事件流
-│   ├── config.py          # LLM 客户端工厂（单例 + lru_cache）
-│   ├── main.py            # FastAPI: REST API + WebSocket + 前端服务
-│   └── models.py          # Pydantic 数据模型（任务状态 + WebSocket 事件）
-├── frontend/
-│   └── index.html         # 单文件 UI：任务输入 + 步骤时间轴 + 结果展示
-├── tests/
-│   ├── conftest.py        # pytest fixtures（mock LLM，无需真实 API Key）
-│   ├── test_agent_manager.py
-│   ├── test_api.py
-│   └── test_models.py
-├── docs/
-│   └── browser-use-deep-dive.md  # browser-use 源码深度解析
-├── pyproject.toml
-└── .env.example
+Server → Client
+
+{ "type": "step",  "step": 3, "goal": "clicking search button", "screenshot": "<base64>" }
+{ "type": "done",  "result": "Here are the top 5 repos: ..." }
+{ "type": "error", "message": "..." }
 ```
+
+All `type` fields are `Literal["step"|"done"|"error"]` — Pydantic rejects anything else at construction time.
 
 ---
 
-## API
+## REST API
 
 ```
 POST /api/task
-  Body:    { "task": "你的信息搜集任务描述" }
+  Body:    { "task": "your task description" }
   Returns: { "task_id": "uuid" }
 
 GET /api/task/{task_id}
   Returns: { "task_id": "...", "status": "running|done|failed", "result": "..." }
-
-WS /ws/{task_id}
-  Server → Client events:
-    { "type": "step", "step": 3, "goal": "正在搜索...", "screenshot": "base64..." }
-    { "type": "done", "result": "找到以下项目：..." }
-    { "type": "error", "message": "..." }
 ```
 
 ---
 
-## 深度阅读
+## Project Structure
 
-在动手做这个项目之前，我深度阅读了 browser-use 的源码，整理了一篇分析文章：
+```
+web-assistant/
+├── backend/
+│   ├── agent_manager.py   # browser-use wrapper + asyncio.Queue event stream
+│   ├── config.py          # LLM client factory (singleton via lru_cache)
+│   ├── main.py            # FastAPI: REST + WebSocket + frontend serving
+│   └── models.py          # Pydantic models: task state + WebSocket events
+├── frontend/
+│   └── index.html         # Task input + live step timeline + result display
+├── tests/
+│   ├── conftest.py        # pytest fixtures (mock LLM — no real API key needed)
+│   ├── test_agent_manager.py
+│   ├── test_api.py
+│   └── test_models.py
+├── docs/
+│   └── browser-use-deep-dive.md   # Deep dive into browser-use internals (CN)
+└── pyproject.toml
+```
 
-**[→ browser-use 源码深度解析：一个 Web Agent 框架的工程落地实践](docs/browser-use-deep-dive.md)**
+**Run tests (no API key needed):**
 
-覆盖：Agent Loop 三阶段模型、DOM 三协议并行提取、Token 压缩机制、死循环检测、结构化输出可靠性、多标签页竞态处理。
+```bash
+pytest tests/ -v   # 20 tests
+```
 
 ---
 
-## 路线图
+## Things I Learned Building This
 
-**V0（当前）**
-- [x] 信息搜集任务
-- [x] 实时步骤截图推送
-- [x] FastAPI + WebSocket 后端
-- [x] 单文件 HTML 前端
+**browser-use 0.12.6 migrated away from LangChain** to its own LLM abstraction layer (`browser_use/llm/`). The `Agent.__init__` validates `llm.provider == "browser-use"` — LangChain's `ChatAnthropic` has no `provider` attribute, causing a cryptic `AttributeError`. Fix: use `browser_use.llm.anthropic.chat.ChatAnthropic` instead.
 
-**V1（计划中）**
-- [ ] 多 tab 并发信息搜集（Orchestrator + Executor 双层架构）
-- [ ] 表单操作、登录流程
-- [ ] 任务历史持久化
-- [ ] React 前端 + 可视化 Agent 执行图
-- [ ] 接入 MCP，动态发现外部工具
-- [ ] DOM 提取失败时降级到 Vision 模型兜底
+**`BrowserStateSummary.screenshot` is already base64**, not raw bytes. Wrapping it in `base64.b64encode()` double-encodes and produces a blank image in the browser.
+
+**`max_steps` belongs in `agent.run()`**, not `Agent.__init__()`. Passing it to the constructor silently succeeds (absorbed by `**kwargs`) but has no effect.
+
+---
+
+## Roadmap
+
+**V0 (current)**
+- [x] Information gathering tasks
+- [x] Live step screenshots streamed over WebSocket
+- [x] FastAPI + WebSocket backend
+- [x] Zero-build HTML frontend
+
+**V1 (planned)**
+- [ ] Multi-tab concurrent search (Orchestrator + Executor architecture)
+- [ ] Form interactions and login flows
+- [ ] Task history persistence
+- [ ] React frontend with agent execution graph
+- [ ] MCP integration for dynamic tool discovery
+- [ ] Vision model fallback when DOM extraction fails
+
+---
+
+## Deep Dive
+
+Before building this, I read through the browser-use source and wrote a detailed breakdown:
+
+**[→ browser-use internals: how a Web Agent framework actually works](docs/browser-use-deep-dive.md)** (Chinese)
+
+Covers: the 3-phase Agent Loop, parallel DOM extraction via 3 CDP protocols, token compression, infinite-loop detection, structured output reliability, and multi-tab race conditions.
 
 ---
 
