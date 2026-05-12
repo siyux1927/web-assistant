@@ -87,16 +87,21 @@
     function connectWebSocket(taskId) {
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       ws = new WebSocket(`${proto}://${location.host}/ws/${taskId}`);
+      let taskFinished = false;
 
       ws.onmessage = (e) => {
         const event = JSON.parse(e.data);
         if (event.type === 'step') handleStep(event);
-        else if (event.type === 'done') handleDone(event);
-        else if (event.type === 'error') handleError(event);
+        else if (event.type === 'done') { taskFinished = true; handleDone(event); }
+        else if (event.type === 'error') { taskFinished = true; handleError(event); }
       };
 
       ws.onerror = () => setStatus('WebSocket 连接错误', true);
-      ws.onclose = () => document.getElementById('start-btn').disabled = false;
+      ws.onclose = () => {
+        document.getElementById('start-btn').disabled = false;
+        ws = null;
+        if (!taskFinished) setStatus('连接意外断开，请查看后端日志', true);
+      };
     }
 
     function handleStep(event) {
