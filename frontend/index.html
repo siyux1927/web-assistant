@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web Assistant</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+           background: #0f0f0f; color: #e0e0e0; min-height: 100vh; padding: 24px; }
+    h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 24px; color: #fff; }
+    .input-row { display: flex; gap: 12px; margin-bottom: 32px; }
+    textarea { flex: 1; padding: 12px 16px; border-radius: 8px; border: 1px solid #333;
+               background: #1a1a1a; color: #e0e0e0; font-size: 14px; resize: vertical;
+               min-height: 60px; }
+    textarea:focus { outline: none; border-color: #555; }
+    button { padding: 0 24px; border-radius: 8px; border: none; cursor: pointer;
+             background: #2563eb; color: #fff; font-size: 14px; font-weight: 500; }
+    button:disabled { background: #333; color: #666; cursor: not-allowed; }
+    #steps { margin-bottom: 32px; }
+    .step-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px;
+                 padding: 16px; margin-bottom: 12px; }
+    .step-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .step-badge { background: #2563eb; color: #fff; font-size: 11px; font-weight: 600;
+                  padding: 2px 8px; border-radius: 4px; }
+    .step-goal { font-size: 14px; color: #ccc; }
+    .step-screenshot img { width: 100%; border-radius: 4px; max-height: 300px;
+                           object-fit: contain; background: #111; }
+    #result-section { display: none; background: #1a1a1a; border: 1px solid #2a2a2a;
+                      border-radius: 8px; padding: 20px; }
+    #result-section h2 { font-size: 1rem; font-weight: 600; margin-bottom: 12px;
+                         color: #fff; }
+    #result-text { font-size: 14px; line-height: 1.7; color: #ccc;
+                   white-space: pre-wrap; word-break: break-word; }
+    #status-bar { font-size: 13px; color: #888; margin-bottom: 16px; }
+    .error { color: #f87171; }
+  </style>
+</head>
+<body>
+  <h1>Web Assistant</h1>
+
+  <div class="input-row">
+    <textarea id="task-input" placeholder="描述你的信息搜集任务，例如：找 GitHub 上最近 star 增长最快的 Python AI 项目，列出 top 5"></textarea>
+    <button id="start-btn" onclick="startTask()">开始</button>
+  </div>
+
+  <div id="status-bar"></div>
+  <div id="steps"></div>
+  <div id="result-section">
+    <h2>最终结果</h2>
+    <div id="result-text"></div>
+  </div>
+
+  <script>
+    let ws = null;
+
+    async function startTask() {
+      const task = document.getElementById('task-input').value.trim();
+      if (!task) return;
+
+      document.getElementById('start-btn').disabled = true;
+      document.getElementById('steps').innerHTML = '';
+      document.getElementById('result-section').style.display = 'none';
+      document.getElementById('result-text').textContent = '';
+      setStatus('正在启动任务...');
+
+      let taskId;
+      try {
+        const res = await fetch('/api/task', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        taskId = data.task_id;
+      } catch (err) {
+        setStatus('创建任务失败: ' + err.message, true);
+        document.getElementById('start-btn').disabled = false;
+        return;
+      }
+
+      setStatus('Agent 已启动，正在执行...');
+      connectWebSocket(taskId);
+    }
+
+    function connectWebSocket(taskId) {
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      ws = new WebSocket(`${proto}://${location.host}/ws/${taskId}`);
+
+      ws.onmessage = (e) => {
+        const event = JSON.parse(e.data);
+        if (event.type === 'step') handleStep(event);
+        else if (event.type === 'done') handleDone(event);
+        else if (event.type === 'error') handleError(event);
+      };
+
+      ws.onerror = () => setStatus('WebSocket 连接错误', true);
+      ws.onclose = () => document.getElementById('start-btn').disabled = false;
+    }
+
+    function handleStep(event) {
+      setStatus(`执行中... 第 ${event.step} 步`);
+      const card = document.createElement('div');
+      card.className = 'step-card';
+      card.innerHTML = `
+        <div class="step-header">
+          <span class="step-badge">Step ${event.step}</span>
+          <span class="step-goal">${escapeHtml(event.goal)}</span>
+        </div>
+        ${event.screenshot
+          ? `<div class="step-screenshot"><img src="data:image/png;base64,${event.screenshot}" alt="step screenshot"/></div>`
+          : ''}
+      `;
+      document.getElementById('steps').appendChild(card);
+      card.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+
+    function handleDone(event) {
+      setStatus('任务完成');
+      document.getElementById('result-section').style.display = 'block';
+      document.getElementById('result-text').textContent = event.result;
+      document.getElementById('result-section').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function handleError(event) {
+      setStatus('任务失败: ' + event.message, true);
+    }
+
+    function setStatus(msg, isError = false) {
+      const el = document.getElementById('status-bar');
+      el.textContent = msg;
+      el.className = isError ? 'error' : '';
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+  </script>
+</body>
+</html>
